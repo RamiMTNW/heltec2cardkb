@@ -984,7 +984,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
 #ifdef PIN_BUZZER
   buzzer.begin();
-  buzzer.quiet(_node_prefs->buzzer_quiet);
+  buzzer.quiet(false);  // zawsze włączony
 #endif
 
 #ifdef PIN_VIBRATION
@@ -1044,6 +1044,16 @@ switch(t){
     vibration.trigger();
   }
 #endif
+
+  // Wybudź ekran przy przychodzącej wiadomości
+  if (t == UIEventType::contactMessage || t == UIEventType::channelMessage ||
+      t == UIEventType::roomMessage || t == UIEventType::newContactMessage) {
+    if (_display != NULL) {
+      _display->turnOn();
+      _auto_off = millis() + AUTO_OFF_MILLIS;
+      _next_refresh = 0;
+    }
+  }
 }
 
 
