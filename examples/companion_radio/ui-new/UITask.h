@@ -53,6 +53,7 @@ class UITask : public AbstractUITask {
 public:
 #if defined(HAS_CARDKB)
   UIScreen* compose = nullptr;
+  UIScreen* history = nullptr;
 #endif
 private:
   UIScreen* msg_preview;
@@ -81,6 +82,7 @@ public:
 #if defined(HAS_CARDKB)
   void gotoComposeContact(const void* c);
   void gotoComposeChannel(int idx);
+  void gotoHistory();
 #endif
   void showAlert(const char* text, int duration_millis);
   int  getMsgCount() const { return _msgcount; }

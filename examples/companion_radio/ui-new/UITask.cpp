@@ -863,11 +863,73 @@ public:
       return true;
     }
 #if defined(HAS_CARDKB)
+    if (c == KEY_UP) { _task->gotoHistory(); return true; }
     if (c>=0x20&&c<=0x7E) { _task->gotoComposeChannel(0); if (_task->compose) ((ComposeScreen*)_task->compose)->handleInput(c); return true; }
 #endif
     return false;
   }
 };
+
+
+#if defined(HAS_CARDKB)
+class HistoryScreen : public UIScreen {
+  UITask* _task;
+  struct HistEntry { char origin[32]; char msg[80]; };
+  #define MAX_HIST 20
+  HistEntry _entries[MAX_HIST];
+  int _count = 0;
+  int _head = 0;   // indeks najnowszego
+  int _view = 0;   // aktualnie przeglądany (0=najnowszy)
+
+public:
+  HistoryScreen(UITask* task) : _task(task) {}
+
+  void addEntry(const char* origin, const char* msg) {
+    _head = (_head + 1) % MAX_HIST;
+    if (_count < MAX_HIST) _count++;
+    strncpy(_entries[_head].origin, origin, sizeof(_entries[_head].origin)-1);
+    strncpy(_entries[_head].msg,    msg,    sizeof(_entries[_head].msg)-1);
+    _view = 0;
+  }
+
+  int render(DisplayDriver& display) override {
+    display.setTextSize(1);
+    display.setColor(DisplayDriver::LIGHT);
+
+    if (_count == 0) {
+      display.drawTextCentered(display.width()/2, 28, "Brak historii");
+      return 0;
+    }
+
+    // Numer wiadomości
+    char tmp[20];
+    snprintf(tmp, sizeof(tmp), "%d/%d", _view+1, _count);
+    display.drawTextRightAlign(display.width(), 0, tmp);
+
+    // Indeks wiadomości do pokazania
+    int idx = (_head - _view + MAX_HIST) % MAX_HIST;
+    auto& e = _entries[idx];
+
+    display.setColor(DisplayDriver::YELLOW);
+    display.drawTextLeftAlign(0, 0, e.origin);
+    display.drawRect(0, 11, display.width(), 1);
+    display.setColor(DisplayDriver::LIGHT);
+    display.setCursor(0, 14);
+    display.printWordWrap(e.msg, display.width());
+
+    display.drawRect(0, 54, display.width(), 1);
+    display.drawTextLeftAlign(0, 55, "UP/DN=scroll ESC=wstecz");
+    return 0;
+  }
+
+  bool handleInput(char c) override {
+    if (c == KEY_CANCEL || c == KEY_LEFT) { _task->gotoHomeScreen(); return true; }
+    if ((c == KEY_DOWN || c == KEY_NEXT) && _view < _count-1) { _view++; return true; }
+    if ((c == KEY_UP   || c == KEY_PREV) && _view > 0)        { _view--; return true; }
+    return false;
+  }
+};
+#endif
 
 class MsgPreviewScreen : public UIScreen {
   UITask* _task;
@@ -998,6 +1060,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
 #if defined(HAS_CARDKB)
   compose = new ComposeScreen(this);
+  history = new HistoryScreen(this);
 #endif
   msg_preview = new MsgPreviewScreen(this, &rtc_clock);
   setCurrScreen(splash);
@@ -1008,6 +1071,9 @@ void UITask::gotoComposeContact(const void* c) {
 }
 void UITask::gotoComposeChannel(int idx) {
   if (compose) { ((ComposeScreen*)compose)->setChannel(idx); setCurrScreen(compose); }
+}
+void UITask::gotoHistory() {
+  if (history) setCurrScreen(history);
 }
 #endif
 
@@ -1068,6 +1134,9 @@ void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, i
   _msgcount = msgcount;
 
   ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, from_name, text);
+#if defined(HAS_CARDKB)
+  if (history) ((HistoryScreen*)history)->addEntry(from_name, text);
+#endif
   setCurrScreen(msg_preview);
 
   if (_display != NULL) {
