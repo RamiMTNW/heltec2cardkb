@@ -77,7 +77,7 @@ public:
     // meshcomod title (replaces MeshCore logo)
     display.setColor(DisplayDriver::LIGHT);
     display.setTextSize(2);
-    display.drawTextCentered(display.width() / 2, 4, "meshcomod");
+    display.drawTextCentered(display.width() / 2, 4, "MTNW Mesh");
 
     // version info
     display.setTextSize(2);
@@ -102,13 +102,77 @@ class ComposeScreen : public UIScreen {
   UITask* _task;
   char _buf[160];
   int _len = 0;
-  const ContactInfo* _contact = nullptr;
+  ContactInfo _contact_copy;
+  bool _has_contact = false;
   int _channel_idx = -1;
+  int _mode = 0;
+  int _contact_idx = 0;
 public:
   ComposeScreen(UITask* task) : _task(task) { memset(_buf,0,sizeof(_buf)); }
-  void reset() { _len=0; memset(_buf,0,sizeof(_buf)); _contact=nullptr; _channel_idx=-1; }
-  void setContact(const ContactInfo* c) { reset(); _contact=c; }
-  void setChannel(int i) { reset(); _channel_idx=i; }
+  void reset() { _len=0; memset(_buf,0,sizeof(_buf)); _has_contact=false; _channel_idx=0; }
+  void setContact(const ContactInfo* c) { reset(); if(c){_contact_copy=*c; _has_contact=true;} }
+  void setChannel(int i) { reset(); _channel_idx=i; _mode=0; }
+
+  // Znajdź następny kontakt typu CHAT (pomijaj repeatery)
+  bool findContact(int start_idx, int direction) {
+    int n = the_mesh.getNumContacts();
+    if (n == 0) return false;
+    int idx = start_idx;
+    for (int i = 0; i < n; i++) {
+      ContactInfo ci;
+      if (the_mesh.getContactByIdx(idx, ci)) {
+        if (ci.type == ADV_TYPE_CHAT) {  // tylko companion nodes
+          _contact_copy = ci;
+          _has_contact = true;
+          _contact_idx = idx;
+          return true;
+        }
+      }
+      idx = (idx + direction + n) % n;
+    }
+    return false;
+  }
+
+  // Tab: przełącz tryb kanał/kontakt
+  void toggleMode() {
+    if (_mode == 0) {
+      if (findContact(0, 1)) _mode = 1;
+    } else {
+      _mode = 0;
+      _has_contact = false;
+    }
+  }
+
+  // Strzałka prawo: następny kanał lub kontakt
+  void nextTarget() {
+    if (_mode == 0) {
+      ChannelDetails ch;
+      int next = _channel_idx + 1;
+      while (next < MAX_GROUP_CHANNELS) {
+        if (the_mesh.getChannel(next, ch)) { _channel_idx = next; return; }
+        next++;
+      }
+      _channel_idx = 0; // wróć do pierwszego
+    } else {
+      findContact(_contact_idx + 1, 1);
+    }
+  }
+
+  // Strzałka lewo: poprzedni kanał lub kontakt
+  void prevTarget() {
+    if (_mode == 0) {
+      ChannelDetails ch;
+      int prev = _channel_idx - 1;
+      while (prev >= 0) {
+        if (the_mesh.getChannel(prev, ch)) { _channel_idx = prev; return; }
+        prev--;
+      }
+    } else {
+      int n = the_mesh.getNumContacts();
+      findContact((_contact_idx - 1 + n) % n, -1);
+    }
+  }
+
   void nextChannel() {
     // Szukamy kolejnego istniejącego kanału (max MAX_GROUP_CHANNELS prób)
     ChannelDetails ch;
@@ -121,8 +185,8 @@ public:
     if (c==KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
     if (c==KEY_ENTER) {
       if (_len>0) {
-        if (_contact) {
-          uint32_t ea,et; the_mesh.sendMessage(*_contact,0,0,_buf,ea,et);
+    if (_has_contact) {
+      uint32_t ea,et; the_mesh.sendMessage(_contact_copy,0,0,_buf,ea,et);
         } else if (_channel_idx>=0) {
           ChannelDetails ch;
           if (the_mesh.getChannel(_channel_idx,ch))
@@ -131,7 +195,9 @@ public:
       }
       _task->gotoHomeScreen(); return true;
     }
-    if (c==0x09) { nextChannel(); return true; }  // Tab = następny kanał
+    if (c==0x09) { toggleMode(); return true; }  // Tab = przełącz kanał/kontakt
+    if (c==KEY_RIGHT) { nextTarget(); return true; }  // → następny
+    if (c==KEY_LEFT)  { prevTarget(); return true; }  // ← poprzedni
     if ((c==0x08||c==0x7F)&&_len>0) { _buf[--_len]=0; return true; }
     if (c>=0x20&&c<=0x7E&&_len<150) { _buf[_len++]=c; _buf[_len]=0; return true; }
     return false;
@@ -139,18 +205,17 @@ public:
   int render(DisplayDriver& display) override {
     display.setColor(DisplayDriver::LIGHT);
     display.setTextSize(1);
-    if (_contact) {
-      char h[32]; snprintf(h,sizeof(h),"Do: %.20s",_contact->name);
-      display.drawTextLeftAlign(0,0,h);
+    char hdr[32];
+    if (_mode == 1 && _has_contact) {
+      snprintf(hdr, sizeof(hdr), "Do: %.17s", _contact_copy.name);
     } else {
       ChannelDetails ch;
-      char hdr[32];
       if (the_mesh.getChannel(_channel_idx, ch))
-        snprintf(hdr, sizeof(hdr), "Kanal: %.16s", ch.name);
+        snprintf(hdr, sizeof(hdr), "K: %.19s", ch.name);
       else
         snprintf(hdr, sizeof(hdr), "Kanal: %d", _channel_idx);
-      display.drawTextLeftAlign(0, 0, hdr);
     }
+    display.drawTextLeftAlign(0, 0, hdr);
     display.drawRect(0,10,display.width(),1);
     char tmp[164]; bool cur=(millis()/500)%2;
     snprintf(tmp,sizeof(tmp),"%s%s",_buf,cur?"_":" ");
