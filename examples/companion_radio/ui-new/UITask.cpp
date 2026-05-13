@@ -2,6 +2,9 @@
 #include <helpers/TxtDataHelpers.h>
 #include "../MyMesh.h"
 #include "target.h"
+#if defined(HAS_CARDKB) && defined(ESP32)
+  #include <helpers/input/CardKBInput.h>
+#endif
 #if defined(HAS_HELTEC_V4_CAP_TOUCH) && defined(ESP32)
   #include <helpers/input/HeltecV4CapTouch.h>
 #endif
@@ -1050,6 +1053,9 @@ void UITask::loop() {
   }
 #endif
 
+#if defined(HAS_CARDKB) && defined(ESP32)
+  if (c == 0) c = cardKBCheck();
+#endif
   if (c != 0 && curr) {
     curr->handleInput(c);
     _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
