@@ -3,6 +3,9 @@
 #include "../MyMesh.h"
 #include "target.h"
 #if defined(HAS_CARDKB) && defined(ESP32)
+#include <helpers/input/CardKBInput.h>
+#endif
+#if defined(HAS_CARDKB) && defined(ESP32)
   #include <helpers/input/CardKBInput.h>
 #endif
 #if defined(HAS_HELTEC_V4_CAP_TOUCH) && defined(ESP32)
@@ -92,6 +95,78 @@ public:
     }
   }
 };
+
+
+#if defined(HAS_CARDKB)
+class ComposeScreen : public UIScreen {
+  UITask* _task;
+  char _buf[160];
+  int _len = 0;
+  const ContactInfo* _contact = nullptr;
+  int _channel_idx = -1;
+public:
+  ComposeScreen(UITask* task) : _task(task) { memset(_buf,0,sizeof(_buf)); }
+  void reset() { _len=0; memset(_buf,0,sizeof(_buf)); _contact=nullptr; _channel_idx=-1; }
+  void setContact(const ContactInfo* c) { reset(); _contact=c; }
+  void setChannel(int i) { reset(); _channel_idx=i; }
+  void nextChannel() {
+    // Szukamy kolejnego istniejącego kanału (max MAX_GROUP_CHANNELS prób)
+    ChannelDetails ch;
+    for (int i = 1; i <= MAX_GROUP_CHANNELS; i++) {
+      int next = (_channel_idx + i) % MAX_GROUP_CHANNELS;
+      if (the_mesh.getChannel(next, ch)) { _channel_idx = next; return; }
+    }
+  }
+  bool handleInput(char c) override {
+    if (c==KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
+    if (c==KEY_ENTER) {
+      if (_len>0) {
+        if (_contact) {
+          uint32_t ea,et; the_mesh.sendMessage(*_contact,0,0,_buf,ea,et);
+        } else if (_channel_idx>=0) {
+          ChannelDetails ch;
+          if (the_mesh.getChannel(_channel_idx,ch))
+            the_mesh.sendGroupMessage(0,ch.channel,the_mesh.getNodePrefs()->node_name,_buf,_len);
+        }
+      }
+      _task->gotoHomeScreen(); return true;
+    }
+    if (c==0x09) { nextChannel(); return true; }  // Tab = następny kanał
+    if ((c==0x08||c==0x7F)&&_len>0) { _buf[--_len]=0; return true; }
+    if (c>=0x20&&c<=0x7E&&_len<150) { _buf[_len++]=c; _buf[_len]=0; return true; }
+    return false;
+  }
+  int render(DisplayDriver& display) override {
+    display.setColor(DisplayDriver::LIGHT);
+    display.setTextSize(1);
+    if (_contact) {
+      char h[32]; snprintf(h,sizeof(h),"Do: %.20s",_contact->name);
+      display.drawTextLeftAlign(0,0,h);
+    } else {
+      ChannelDetails ch;
+      char hdr[32];
+      if (the_mesh.getChannel(_channel_idx, ch))
+        snprintf(hdr, sizeof(hdr), "Kanal: %.16s", ch.name);
+      else
+        snprintf(hdr, sizeof(hdr), "Kanal: %d", _channel_idx);
+      display.drawTextLeftAlign(0, 0, hdr);
+    }
+    display.drawRect(0,10,display.width(),1);
+    char tmp[164]; bool cur=(millis()/500)%2;
+    snprintf(tmp,sizeof(tmp),"%s%s",_buf,cur?"_":" ");
+    for(int i=0;i<3;i++){
+      if(i*21>=(int)strlen(tmp)) break;
+      char ln[22]={0}; strncpy(ln,tmp+i*21,21);
+      display.drawTextLeftAlign(0,12+i*12,ln);
+    }
+    char cnt[12]; snprintf(cnt,sizeof(cnt),"%d/150",_len);
+    display.drawTextRightAlign(display.width(),42,cnt);
+    display.drawRect(0,54,display.width(),1);
+    display.drawTextLeftAlign(0,55,"ENTER=wyslij ESC=wstecz");
+    return 50;
+  }
+};
+#endif
 
 class HomeScreen : public UIScreen {
   enum HomePage {
@@ -722,6 +797,9 @@ public:
       }
       return true;
     }
+#if defined(HAS_CARDKB)
+    if (c>=0x20&&c<=0x7E) { _task->gotoComposeChannel(0); if (_task->compose) ((ComposeScreen*)_task->compose)->handleInput(c); return true; }
+#endif
     return false;
   }
 };
@@ -853,9 +931,21 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
 
   splash = new SplashScreen(this);
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
+#if defined(HAS_CARDKB)
+  compose = new ComposeScreen(this);
+#endif
   msg_preview = new MsgPreviewScreen(this, &rtc_clock);
   setCurrScreen(splash);
 }
+#if defined(HAS_CARDKB)
+void UITask::gotoComposeContact(const void* c) {
+  if (compose) { ((ComposeScreen*)compose)->setContact((const ContactInfo*)c); setCurrScreen(compose); }
+}
+void UITask::gotoComposeChannel(int idx) {
+  if (compose) { ((ComposeScreen*)compose)->setChannel(idx); setCurrScreen(compose); }
+}
+#endif
+
 
 void UITask::showAlert(const char* text, int duration_millis) {
   strcpy(_alert, text);
@@ -1054,7 +1144,9 @@ void UITask::loop() {
 #endif
 
 #if defined(HAS_CARDKB) && defined(ESP32)
-  if (c == 0) c = cardKBCheck();
+#endif
+#if defined(HAS_CARDKB) && defined(ESP32)
+  if (c==0) { char ck=cardKBCheck(); if(ck!=0) c=checkDisplayOn(ck); if(c==0) c=ck; }
 #endif
   if (c != 0 && curr) {
     curr->handleInput(c);

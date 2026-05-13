@@ -50,6 +50,11 @@ class UITask : public AbstractUITask {
 
   UIScreen* splash;
   UIScreen* home;
+public:
+#if defined(HAS_CARDKB)
+  UIScreen* compose = nullptr;
+#endif
+private:
   UIScreen* msg_preview;
   UIScreen* curr;
 
@@ -73,6 +78,10 @@ public:
   void begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs);
 
   void gotoHomeScreen() { setCurrScreen(home); }
+#if defined(HAS_CARDKB)
+  void gotoComposeContact(const void* c);
+  void gotoComposeChannel(int idx);
+#endif
   void showAlert(const char* text, int duration_millis);
   int  getMsgCount() const { return _msgcount; }
   bool hasDisplay() const { return _display != NULL; }
