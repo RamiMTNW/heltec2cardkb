@@ -918,14 +918,34 @@ public:
     display.printWordWrap(e.msg, display.width());
 
     display.drawRect(0, 54, display.width(), 1);
-    display.drawTextLeftAlign(0, 55, "UP/DN=scroll ESC=wstecz");
+    display.drawTextLeftAlign(0, 55, "UP/DN=scroll BS=usun");
     return 0;
+  }
+
+  void deleteEntry(int view_idx) {
+    if (_count == 0) return;
+    // Indeks w buforze
+    int idx = (_head - view_idx + MAX_HIST) % MAX_HIST;
+    // Przesuń wszystkie nowsze wpisy o jeden w dół
+    for (int i = 0; i < view_idx; i++) {
+      int cur  = (_head - i + MAX_HIST) % MAX_HIST;
+      int prev = (_head - i - 1 + MAX_HIST) % MAX_HIST;
+      _entries[cur] = _entries[prev];
+    }
+    _head = (_head - 1 + MAX_HIST) % MAX_HIST;
+    _count--;
+    if (_view >= _count && _view > 0) _view--;
   }
 
   bool handleInput(char c) override {
     if (c == KEY_CANCEL || c == KEY_LEFT) { _task->gotoHomeScreen(); return true; }
     if ((c == KEY_DOWN || c == KEY_NEXT) && _view < _count-1) { _view++; return true; }
     if ((c == KEY_UP   || c == KEY_PREV) && _view > 0)        { _view--; return true; }
+    if (c == 0x08 || c == 0x7F) {  // Backspace/Del = usuń wiadomość
+      deleteEntry(_view);
+      if (_count == 0) _task->gotoHomeScreen();
+      return true;
+    }
     return false;
   }
 };
@@ -947,6 +967,7 @@ class MsgPreviewScreen : public UIScreen {
 
 public:
   MsgPreviewScreen(UITask* task, mesh::RTCClock* rtc) : _task(task), _rtc(rtc) { num_unread = 0; }
+  void clearUnread() { num_unread = 0; }
 
   void addPreview(uint8_t path_len, const char* from_name, const char* msg) {
     head = (head + 1) % MAX_UNREAD_MSGS;
@@ -1073,7 +1094,11 @@ void UITask::gotoComposeChannel(int idx) {
   if (compose) { ((ComposeScreen*)compose)->setChannel(idx); setCurrScreen(compose); }
 }
 void UITask::gotoHistory() {
-  if (history) setCurrScreen(history);
+  if (history) {
+    ((MsgPreviewScreen*)msg_preview)->clearUnread();
+    _msgcount = 0;
+    setCurrScreen(history);
+  }
 }
 #endif
 
