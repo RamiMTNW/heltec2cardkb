@@ -922,6 +922,8 @@ public:
     return 0;
   }
 
+  void gotoOldest() { if (_count > 0) _view = _count - 1; }
+
   void deleteEntry(int view_idx) {
     if (_count == 0) return;
     // Indeks w buforze
@@ -1097,6 +1099,7 @@ void UITask::gotoHistory() {
   if (history) {
     ((MsgPreviewScreen*)msg_preview)->clearUnread();
     _msgcount = 0;
+    ((HistoryScreen*)history)->gotoOldest();
     setCurrScreen(history);
   }
 }
@@ -1156,7 +1159,7 @@ void UITask::msgRead(int msgcount) {
 }
 
 void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) {
-  _msgcount = msgcount;
+  _msgcount++;  // zliczamy sami, ignorujemy globalny history_count
 
   ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, from_name, text);
 #if defined(HAS_CARDKB)
