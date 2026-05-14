@@ -874,7 +874,7 @@ public:
 #if defined(HAS_CARDKB)
 class HistoryScreen : public UIScreen {
   UITask* _task;
-  struct HistEntry { char origin[32]; char msg[80]; };
+  struct HistEntry { char origin[32]; char msg[160]; };
   #define MAX_HIST 20
   HistEntry _entries[MAX_HIST];
   int _count = 0;
@@ -922,11 +922,7 @@ public:
       strncpy(line, e.msg + char_start, CHARS_PER_LINE);
       display.drawTextLeftAlign(0, 14 + i * 12, line);
     }
-    int total_lines = (msg_len + CHARS_PER_LINE - 1) / CHARS_PER_LINE;
-    if (total_lines > LINES_PER_PAGE) {
-      char sc[8]; snprintf(sc, sizeof(sc), "%d/%d", _line_offset+1, total_lines);
-      display.drawTextRightAlign(display.width(), 42, sc);
-    }
+
 
     display.drawRect(0, 54, display.width(), 1);
     display.drawTextLeftAlign(0, 55, ",/.=tekst UP/DN=msg");
@@ -957,13 +953,13 @@ public:
     if (c == KEY_CANCEL || c == KEY_LEFT) { _task->gotoHomeScreen(); return true; }
     if ((c == KEY_DOWN || c == KEY_NEXT) && _view < _count-1) { _view++; return true; }
     if ((c == KEY_UP   || c == KEY_PREV) && _view > 0)        { _view--; return true; }
-    if (c == 0x2E) {  // . = nastepna linia
+    if (c == 0x2E) {  // . = nastepna strona
       int idx = (_head - _view + MAX_HIST) % MAX_HIST;
       int total = (strlen(_entries[idx].msg) + CHARS_PER_LINE - 1) / CHARS_PER_LINE;
-      if (_line_offset + LINES_PER_PAGE < total) { _line_offset++; return true; }
+      if (_line_offset + LINES_PER_PAGE < total) { _line_offset += LINES_PER_PAGE; if (_line_offset + LINES_PER_PAGE > total) _line_offset = total - LINES_PER_PAGE; if (_line_offset < 0) _line_offset = 0; return true; }
     }
-    if (c == 0x2C) {  // , = poprzednia linia
-      if (_line_offset > 0) { _line_offset--; return true; }
+    if (c == 0x2C) {  // , = poprzednia strona
+      if (_line_offset > 0) { _line_offset -= LINES_PER_PAGE; if (_line_offset < 0) _line_offset = 0; return true; }
     }
     if (c == 0x08 || c == 0x7F) {  // Backspace/Del = usuń wiadomość
       deleteEntry(_view);
