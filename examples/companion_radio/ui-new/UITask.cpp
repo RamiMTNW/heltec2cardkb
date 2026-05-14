@@ -925,7 +925,7 @@ public:
 
 
     display.drawRect(0, 54, display.width(), 1);
-    display.drawTextLeftAlign(0, 55, ",/.=tekst UP/DN=msg");
+    display.drawTextLeftAlign(0, 55, ",/.=tekst LR=msg");
     return 0;
   }
 
@@ -950,9 +950,9 @@ public:
   }
 
   bool handleInput(char c) override {
-    if (c == KEY_CANCEL || c == KEY_LEFT) { _task->gotoHomeScreen(); return true; }
-    if ((c == KEY_DOWN || c == KEY_NEXT) && _view < _count-1) { _view++; return true; }
-    if ((c == KEY_UP   || c == KEY_PREV) && _view > 0)        { _view--; return true; }
+    if ((c == KEY_RIGHT || c == KEY_NEXT) && _view > 0)        { _view--; _line_offset=0; return true; }
+    if ((c == KEY_LEFT  || c == KEY_PREV) && _view < _count-1) { _view++; _line_offset=0; return true; }
+    if (c == KEY_CANCEL) { _task->gotoHomeScreen(); return true; }
     if (c == 0x2E) {  // . = nastepna strona
       int idx = (_head - _view + MAX_HIST) % MAX_HIST;
       int total = (strlen(_entries[idx].msg) + CHARS_PER_LINE - 1) / CHARS_PER_LINE;
