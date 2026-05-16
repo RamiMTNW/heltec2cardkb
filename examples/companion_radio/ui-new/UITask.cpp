@@ -936,15 +936,12 @@ public:
 
   void deleteEntry(int view_idx) {
     if (_count == 0) return;
-    // Indeks w buforze
-    int idx = (_head - view_idx + MAX_HIST) % MAX_HIST;
-    // Przesuń wszystkie nowsze wpisy o jeden w dół
-    for (int i = 0; i < view_idx; i++) {
+    // Przesuń starsze wpisy w górę (nadpisz usuwany)
+    for (int i = view_idx; i < _count - 1; i++) {
       int cur  = (_head - i + MAX_HIST) % MAX_HIST;
-      int prev = (_head - i - 1 + MAX_HIST) % MAX_HIST;
-      _entries[cur] = _entries[prev];
+      int next = (_head - i - 1 + MAX_HIST) % MAX_HIST;
+      _entries[cur] = _entries[next];
     }
-    _head = (_head - 1 + MAX_HIST) % MAX_HIST;
     _count--;
     if (_view >= _count && _view > 0) _view--;
   }
@@ -963,8 +960,9 @@ public:
     }
     if (c == 0x08 || c == 0x7F) {  // Backspace/Del = usuń wiadomość
       deleteEntry(_view);
-      if (_count == 0) _task->gotoHomeScreen();
-      return true;
+      _line_offset = 0;
+      if (_count == 0) { _task->gotoHomeScreen(); return true; }
+      if (_view >= _count) _view = _count - 1;
     }
     return false;
   }
