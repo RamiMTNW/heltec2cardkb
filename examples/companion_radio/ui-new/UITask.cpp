@@ -871,6 +871,40 @@ public:
 };
 
 
+
+// Transliteracja polskich znaków UTF-8 na ASCII
+static void transliteratePolish(char* buf, int maxlen) {
+    // Polskie znaki w UTF-8 to sekwencje 2-bajtowe: 0xC4/0xC5 + drugi bajt
+    static const struct { uint8_t b1, b2; char rep; } map[] = {
+        {0xC4,0x85,'a'}, {0xC4,0x84,'A'}, // ą Ą
+        {0xC4,0x87,'c'}, {0xC4,0x86,'C'}, // ć Ć
+        {0xC4,0x99,'e'}, {0xC4,0x98,'E'}, // ę Ę
+        {0xC5,0x82,'l'}, {0xC5,0x81,'L'}, // ł Ł
+        {0xC5,0x84,'n'}, {0xC5,0x83,'N'}, // ń Ń
+        {0xC3,0xB3,'o'}, {0xC3,0x93,'O'}, // ó Ó
+        {0xC5,0x9B,'s'}, {0xC5,0x9A,'S'}, // ś Ś
+        {0xC5,0xBA,'z'}, {0xC5,0xB9,'Z'}, // ź Ź
+        {0xC5,0xBC,'z'}, {0xC5,0xBB,'Z'}, // ż Ż
+        {0,0,0}
+    };
+    char tmp[161] = {0};
+    int j = 0;
+    for (int i = 0; i < maxlen && buf[i] && j < 159; i++) {
+        uint8_t c = (uint8_t)buf[i];
+        bool replaced = false;
+        for (int k = 0; map[k].b1 != 0; k++) {
+            if (c == map[k].b1 && (uint8_t)buf[i+1] == map[k].b2) {
+                tmp[j++] = map[k].rep;
+                i++;
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) tmp[j++] = buf[i];
+    }
+    strncpy(buf, tmp, maxlen);
+}
+
 #if defined(HAS_CARDKB)
 class HistoryScreen : public UIScreen {
   UITask* _task;
@@ -889,6 +923,8 @@ public:
     if (_count < MAX_HIST) _count++;
     strncpy(_entries[_head].origin, origin, sizeof(_entries[_head].origin)-1);
     strncpy(_entries[_head].msg,    msg,    sizeof(_entries[_head].msg)-1);
+    transliteratePolish(_entries[_head].origin, sizeof(_entries[_head].origin));
+    transliteratePolish(_entries[_head].msg,    sizeof(_entries[_head].msg));
     _view = 0;
   }
 
@@ -1175,7 +1211,16 @@ void UITask::msgRead(int msgcount) {
 }
 
 void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) {
-  _msgcount++;  // zliczamy sami, ignorujemy globalny history_count
+  _msgcount++;
+  // Transliteracja polskich znaków przed wyświetleniem
+  char clean_text[161] = {0};
+  char clean_name[33] = {0};
+  strncpy(clean_text, text, 160);
+  strncpy(clean_name, from_name, 32);
+  transliteratePolish(clean_text, sizeof(clean_text));
+  transliteratePolish(clean_name, sizeof(clean_name));
+  text = clean_text;
+  from_name = clean_name;  // zliczamy sami, ignorujemy globalny history_count
 
   ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, from_name, text);
 #if defined(HAS_CARDKB)
