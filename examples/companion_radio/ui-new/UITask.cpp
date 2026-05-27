@@ -429,13 +429,21 @@ public:
       sprintf(tmp, "MSG: %d", _task->getMsgCount());
       display.drawTextCentered(display.width() / 2, 20, tmp);
 
-      #ifdef WIFI_SSID
-        IPAddress ip = WiFi.localIP();
-        snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+      {
+        uint32_t now = _rtc->getCurrentTime();
         display.setTextSize(1);
-        display.setColor(DisplayDriver::BLUE);
-        display.drawTextCentered(display.width() / 2, 54, tmp);
-      #endif
+        if (now > 1000000) {
+          time_t t = (time_t)now;
+          struct tm* ti = gmtime(&t);
+          char tbuf[20];
+          strftime(tbuf, sizeof(tbuf), "%H:%M %d/%m/%y", ti);
+          display.setColor(DisplayDriver::BLUE);
+          display.drawTextCentered(display.width() / 2, 54, tbuf);
+        } else {
+          display.setColor(DisplayDriver::LIGHT);
+          display.drawTextCentered(display.width() / 2, 54, "Brak sync czasu");
+        }
+      }
       if (_task->hasConnection()) {
         display.setColor(DisplayDriver::GREEN);
         display.setTextSize(1);
