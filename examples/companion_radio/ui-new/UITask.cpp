@@ -241,7 +241,7 @@ class HomeScreen : public UIScreen {
     RADIO,
     BLUETOOTH,
     ADVERT,
-#ifdef MULTI_TRANSPORT_COMPANION
+#if defined(MULTI_TRANSPORT_COMPANION) && !defined(HIDE_NETWORK_PAGES)
     NETWORK,
     WSS,
 #endif
