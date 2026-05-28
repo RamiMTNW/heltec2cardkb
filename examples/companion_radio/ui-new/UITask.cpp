@@ -2,6 +2,7 @@
 #include <helpers/TxtDataHelpers.h>
 #include "../MyMesh.h"
 #include "target.h"
+extern AutoDiscoverRTCClock rtc_clock;
 #if defined(HAS_CARDKB) && defined(ESP32)
 #include <helpers/input/CardKBInput.h>
 #endif
@@ -186,11 +187,11 @@ public:
     if (c==KEY_ENTER) {
       if (_len>0) {
     if (_has_contact) {
-      uint32_t ea,et; the_mesh.sendMessage(_contact_copy,0,0,_buf,ea,et);
+      uint32_t ea,et; the_mesh.sendMessage(_contact_copy,rtc_clock.getCurrentTimeUnique(),0,_buf,ea,et);
         } else if (_channel_idx>=0) {
           ChannelDetails ch;
           if (the_mesh.getChannel(_channel_idx,ch))
-            the_mesh.sendGroupMessage(0,ch.channel,the_mesh.getNodePrefs()->node_name,_buf,_len);
+            the_mesh.sendGroupMessage(rtc_clock.getCurrentTimeUnique(),ch.channel,the_mesh.getNodePrefs()->node_name,_buf,_len);
         }
       }
       _task->gotoHomeScreen(); return true;
@@ -433,7 +434,7 @@ public:
         uint32_t now = _rtc->getCurrentTime();
         display.setTextSize(1);
         if (now > 1000000) {
-          time_t t = (time_t)now;
+          time_t t = (time_t)now + 7200;  // UTC+2 Polska
           struct tm* ti = gmtime(&t);
           char tbuf[20];
           strftime(tbuf, sizeof(tbuf), "%H:%M %d/%m/%y", ti);
